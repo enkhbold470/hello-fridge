@@ -3,11 +3,14 @@ import os
 import google.generativeai as genai
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 # Configure Google AI with your API key
-genai.configure(api_key="GEMINI_API_KEY")
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # Upload function for Gemini
