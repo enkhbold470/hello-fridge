@@ -6,8 +6,9 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import re
 import json
-
-
+import asyncio
+from hume import HumeStreamClient, StreamSocket
+from hume.models.config import FaceConfig
 
 load_dotenv()
 ecost_CA = 0.19
@@ -16,6 +17,20 @@ app = Flask(__name__)
 CORS(app)
 # Configure Google AI with your API key
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+Humeclient = HumeStreamClient(os.getenv("HUME_API_KEY"))
+
+def save_prediction_to_file(prediction):
+    with open('data.json', 'w') as json_file:
+        json.dump(prediction, json_file, indent=4)
+    print("Data has been written to data.json")
+
+async def predict_face_emotion() :
+    print("called")
+    config = FaceConfig(identify_faces=True)
+    async with Humeclient.connect([config]) as socket:
+        result = await socket.send_file("face.jpg")
+        save_prediction_to_file(result)
+        return result   
 
 
 # Upload function for Gemini
@@ -124,6 +139,24 @@ def upload_file():
             return jsonify({"response": item_list})
 
         return jsonify({"error": "Failed to capture image"}), 500
+
+
+@app.route("/hume", methods=["POST"])
+def faceRecognition():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+    if file:
+        filename = secure_filename(file.filename)
+        file.save("face.jpg")
+        print("face.jpg", "file uploaded")
+        prediction = asyncio.run(predict_face_emotion())
+        return jsonify({"prediction": prediction}), 200
+    
+    return jsonify({"error": "Failed to capture image"}), 500
+
 
 
 @app.route('/recipe', methods=['POST'])
