@@ -4,6 +4,10 @@ import google.generativeai as genai
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+import re
+import json
+
+
 
 load_dotenv()
 ecost_CA = 0.19
@@ -20,6 +24,14 @@ def upload_to_gemini(path, mime_type=None):
     print(f"Uploaded file '{file.display_name}' as: {file.uri}")
     return file
 
+def split_by_non_alphanumeric(s: str):
+    # Regular expression pattern to match non-alphanumeric characters
+    pattern = r'[^a-zA-Z0-9]+'
+    # Split the string using the pattern
+    substrings = re.split(pattern, s)
+    return substrings
+
+items_in_fridge = []
 
 # Create the Generative Model
 generation_config = {
@@ -81,15 +93,35 @@ def upload_file():
                         "role": "user",
                         "parts": [
                             response.text,
-                            "Based on the given information only get the name, weight, category no other stuff.",
+                            "Based on the given information only get the name, weight, category no other stuff. If there are multiple items, separate them with newlines. Don't add any styles",
                         ],
                     },
                 ]
-            ).send_message(
-                "Based on the given information only get the name, weight, category no other stuff."
+            )
+            
+            data = processed_response.send_message(
+                "Based on the given information only get the name, weight, category no other stuff. If there are multiple items, separate them with newlines. Don't add any styles"
             )
 
-            return jsonify({"response": processed_response.text})
+            separated = model.start_chat(
+                history=[
+                    {
+                        "role": "user",
+                        "parts": [
+                            data.text,
+                            "Separete the given list of items and make them array of JSON object with fields name, mass, and catergory fields. For example: {name: Apple, weight: 22-30g, catergory: fruit }. Don't give me anything other than the JSON. Don't add any markdown",
+                        ],
+                    },
+                ]
+            ).send_message("Separete the given list of items and make them array of JSON object with fields name, mass, and catergory fields. For example: {name: Apple, weight: 22-30g, catergory: fruit }. Don't give me anything other than the JSON. Don't add any markdown")
+            
+            # splitted_names = split_by_non_alphanumeric(separated.text)
+            item_list = json.loads(separated.text)
+            for item in item_list:
+                items_in_fridge.append(item)
+
+            # print(splitted_names)
+            return jsonify({"response": item_list})
 
         return jsonify({"error": "Failed to capture image"}), 500
 
@@ -141,6 +173,23 @@ def update_sensor():
             "month": round(month, 2),
         }
     )
+
+
+@app.route('/alexa', methods=['GET'])
+def get_concatenated_names():
+    # Extract the 'name' fields of all objects in target_array
+    names = [item['name'] for item in items_in_fridge]
+
+    # Concatenate names with "and" before the last element and " are here" at the end
+    if len(names) > 1:
+        concatenated_names = ', '.join(names[:-1]) + ' and ' + names[-1] + ' are here'
+    else:
+        concatenated_names = names[0] + ' are here' if names else 'No items are here'
+
+    # Add the prefix "In the fridge"
+    concatenated_names_with_prefix = 'In the fridge, ' + concatenated_names
+
+    return jsonify(concatenated_names_with_prefix)
 
 
 if __name__ == "__main__":
