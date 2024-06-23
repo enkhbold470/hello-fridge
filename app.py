@@ -102,14 +102,14 @@ def upload_file():
                         "role": "user",
                         "parts": [
                             file,
-                            "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category for those food.",
+                            "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category and expiration date by considering the average expire time for those food.",
                         ],
                     },
                 ]
             )
 
             response = chat_session.send_message(
-                "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category for those food."
+                "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category and expiration date by considering the average expire time for those food."
             )
 
             processed_response = model.start_chat(
@@ -118,14 +118,14 @@ def upload_file():
                         "role": "user",
                         "parts": [
                             response.text,
-                            "Based on the given information only get the name, weight, category no other stuff. If there are multiple items, separate them with newlines. Don't add any styles",
+                            "Based on the given information only get the name, weight, category, and expiration date no other stuff. If there are multiple items, separate them with newlines. Don't add any styles",
                         ],
                     },
                 ]
             )
             
             data = processed_response.send_message(
-                "Based on the given information only get the name, weight, category no other stuff. If there are multiple items, separate them with newlines. Don't add any styles"
+                "Based on the given information only get the name, weight, category, and expiration date no other stuff. If there are multiple items, separate them with newlines. Don't add any styles"
             )
 
             separated = model.start_chat(
@@ -134,11 +134,11 @@ def upload_file():
                         "role": "user",
                         "parts": [
                             data.text,
-                            "Separete the given list of items and make them array of JSON object with fields name, mass, and catergory fields. For example: {name: Apple, weight: 22-30g, catergory: fruit }. Don't give me anything other than the JSON. Don't add any markdown",
+                            "Separete the given list of items and make them array of JSON object with fields name, mass, catergory, and expiration_date fields. For example: {name: Apple, weight: 22-30g, catergory: fruit }. Don't give me anything other than the JSON. Don't add any markdown",
                         ],
                     },
                 ]
-            ).send_message("Separete the given list of items and make them array of JSON object with fields name, mass, and catergory fields. For example: {name: Apple, weight: 22-30g, catergory: fruit }. Don't give me anything other than the JSON. Don't add any markdown")
+            ).send_message("Separete the given list of items and make them array of JSON object with fields name, mass, catergory, and expiration_date fields. For example: {name: Apple, weight: 22-30g, catergory: fruit }. Don't give me anything other than the JSON. Don't add any markdown")
             
             # splitted_names = split_by_non_alphanumeric(separated.text)
             item_list = json.loads(separated.text)
@@ -162,8 +162,10 @@ def faceRecognition():
         filename = secure_filename(file.filename)
         file.save("face.jpg")
         print("face.jpg", "file uploaded")
-        prediction = asyncio.run(predict_face_emotion())
+        # prediction = asyncio.run(predict_face_emotion())
+        prediction = {"Angry": 1}
         session['emotion_prediction'] = prediction
+        # prediction = asyncio.run(predict_face_emotion())
         return jsonify({"prediction": prediction}), 200
     
     return jsonify({"error": "Failed to capture image"}), 500
