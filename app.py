@@ -161,8 +161,8 @@ def faceRecognition():
         filename = secure_filename(file.filename)
         file.save("face.jpg")
         print("face.jpg", "file uploaded")
-        # prediction = asyncio.run(predict_face_emotion())
-        prediction = {"Angry": 1}
+        prediction = asyncio.run(predict_face_emotion())
+        # prediction = {"Angry": 1}
         session['emotion_prediction'] = prediction
         # prediction = asyncio.run(predict_face_emotion())
         return jsonify({"prediction": prediction}), 200
@@ -173,24 +173,39 @@ def faceRecognition():
 def generate_recipe():
     # Ensure that the processed response text is provided
     if not request.json or 'processed_response' not in request.json:
+        print("Error: No processed response provided")  # Debug print
         return jsonify({'error': 'No processed response provided'}), 400
     
     # Load data from data.json (assuming it's in the same directory)
-    with open('data.json', 'r') as f:
-        data = json.load(f)
+    try:
+        with open('data.json', 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Error loading data.json: {e}")  # Debug print
+        return jsonify({'error': 'Error loading data.json'}), 500
     
     # Retrieve the emotion prediction from the loaded data
     emotion_prediction = data.get('face')  # Adjust this based on your actual JSON structure
     
+    # Debug print for loaded data
+    print(f"Loaded emotion prediction: {emotion_prediction}")
+    
     # Validate the prediction and extract the emotions
     if not emotion_prediction or 'predictions' not in emotion_prediction:
+        print("Error: No valid emotion prediction found")  # Debug print
         return jsonify({'error': 'No valid emotion prediction found'}), 400
     
     # Assuming only one prediction is available in the example JSON
     emotions = emotion_prediction['predictions'][0]['emotions']
     
+    # Debug print for emotions
+    print(f"Extracted emotions: {emotions}")
+    
     # Sort emotions by score (descending)
     emotions_sorted = sorted(emotions, key=lambda x: x['score'], reverse=True)
+    
+    # Debug print for sorted emotions
+    print(f"Sorted emotions: {emotions_sorted}")
     
     # Take top 5 emotions
     top_5_emotions = emotions_sorted[:5]
@@ -198,8 +213,14 @@ def generate_recipe():
     # Extract emotion names from the top 5 emotions
     top_5_emotion_names = [emotion['name'] for emotion in top_5_emotions]
     
+    # Debug print for top 5 emotion names
+    print(f"Top 5 emotion names: {top_5_emotion_names}")
+    
     # Generate a recipe prompt based on identified emotions and processed response
     recipe_prompt = f"Based on the top 5 detected emotions: {', '.join(top_5_emotion_names)}, generate a recipe using {request.json['processed_response']}."
+    
+    # Debug print for recipe prompt
+    print(f"Recipe prompt: {recipe_prompt}")
 
     # Start a chat session to generate the recipe
     recipe_generation = model.start_chat(
@@ -217,7 +238,11 @@ def generate_recipe():
     # Retrieve the generated recipe
     recipe_response = recipe_generation.send_message(recipe_prompt)
     
+    # Debug print for recipe response
+    print(f"Generated recipe response: {recipe_response.text}")
+    
     return jsonify({'recipe': recipe_response.text})
+
 
 ecost = 0
 
