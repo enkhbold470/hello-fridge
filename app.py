@@ -239,24 +239,33 @@ def generate_recipe():
 
     return jsonify({'recipe': recipe_response.text})
 
+electricdata = {
+    'ecost': 0,
+    'month': 0,
+    'watt': 0,
+    'message': 'Sensor data updated'
+}
 
 @app.route("/update-sensor", methods=["POST"])
 def update_sensor():
+    global electricdata  # Declare electricdata as global to modify the global variable
     data = request.json
-    ecost = 0
     ecost_CA = 0.19
-    # print(data)
-    ecost = ecost + (ecost_CA * (data["watt"] / 1000)) / 3600
+    ecost = electricdata['ecost'] + (ecost_CA * (data["watt"] / 1000)) / 3600
     month = (ecost_CA * (data["watt"] / 1000)) * 720
-    return jsonify(
-        {
-            "message": "Sensor data updated",
-            "watt": data["watt"],
-            "ecost": ecost,
-            "month": month,
-        }
-    )
+    electricdata = {
+        "message": "Sensor data updated",
+        "watt": data["watt"],
+        "ecost": ecost,
+        "month": month,
+    }
+    print(electricdata, "is electric data")
+    return jsonify(electricdata)
 
+@app.route("/get-sensor", methods=["GET"])
+def get_electric_data():
+    print(electricdata, "is electric data")
+    return jsonify(electricdata)
 
 @app.route('/alexa', methods=['GET'])
 def get_concatenated_names():
@@ -277,10 +286,12 @@ def get_concatenated_names():
 @app.route('/future-food-plan', methods=['POST'])
 def future_food_plan():
     # Ensure that necessary input is provided
+    print("uisnasdfasdfasf\n\n\n")
     if not request.json or 'dish_types' not in request.json:
         return jsonify({'error': 'No input provided'}), 400
 
     dish_types = request.json['dish_types']
+    print(dish_types)
 
     # Generate a prompt to create a food plan for the next 7 days
     food_plan_prompt = (f"Create a food plan for the next 7 days based on the following items in the fridge: "
