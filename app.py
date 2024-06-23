@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 import os
 import google.generativeai as genai
 from flask_cors import CORS
@@ -33,6 +33,11 @@ model = genai.GenerativeModel(
 
 # Function to capture image
 app.config["UPLOAD_FOLDER"] = "uploads/"
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 
 @app.route("/upload", methods=["POST"])
@@ -161,4 +166,4 @@ def generate_recipe():
 if __name__ == "__main__":
     if not os.path.exists(app.config["UPLOAD_FOLDER"]):
         os.makedirs(app.config["UPLOAD_FOLDER"])
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
