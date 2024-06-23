@@ -6,7 +6,6 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 load_dotenv()
-ecost_CA = 0.19
 
 app = Flask(__name__)
 CORS(app)
@@ -167,21 +166,20 @@ def generate_recipe():
     return jsonify({"recipe": recipe_response.text})
 
 
-ecost = 0
-
-
 @app.route("/update-sensor", methods=["POST"])
 def update_sensor():
     data = request.json
-    print(data)
+    ecost = 0
+    ecost_CA = 0.19
+    # print(data)
     ecost = ecost + (ecost_CA * (data["watt"] / 1000)) / 3600
     month = (ecost_CA * (data["watt"] / 1000)) * 720
     return jsonify(
         {
             "message": "Sensor data updated",
             "watt": data["watt"],
-            "ecost": round(ecost, 2),
-            "month": round(month, 2),
+            "ecost": ecost,
+            "month": month,
         }
     )
 
