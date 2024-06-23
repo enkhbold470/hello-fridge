@@ -169,13 +169,8 @@ def faceRecognition():
     
     return jsonify({"error": "Failed to capture image"}), 500
 
-@app.route('/recipe', methods=['POST'])
+@app.route('/recipe', methods=['GET'])
 def generate_recipe():
-    # Ensure that the processed response text is provided
-    if not request.json or 'processed_response' not in request.json:
-        print("Error: No processed response provided")  # Debug print
-        return jsonify({'error': 'No processed response provided'}), 400
-    
     # Load data from data.json (assuming it's in the same directory)
     try:
         with open('data.json', 'r') as f:
@@ -183,42 +178,45 @@ def generate_recipe():
     except Exception as e:
         print(f"Error loading data.json: {e}")  # Debug print
         return jsonify({'error': 'Error loading data.json'}), 500
-    
+
     # Retrieve the emotion prediction from the loaded data
     emotion_prediction = data.get('face')  # Adjust this based on your actual JSON structure
-    
+
     # Debug print for loaded data
     print(f"Loaded emotion prediction: {emotion_prediction}")
-    
+
     # Validate the prediction and extract the emotions
     if not emotion_prediction or 'predictions' not in emotion_prediction:
         print("Error: No valid emotion prediction found")  # Debug print
         return jsonify({'error': 'No valid emotion prediction found'}), 400
-    
+
     # Assuming only one prediction is available in the example JSON
     emotions = emotion_prediction['predictions'][0]['emotions']
-    
+
     # Debug print for emotions
     print(f"Extracted emotions: {emotions}")
-    
+
     # Sort emotions by score (descending)
     emotions_sorted = sorted(emotions, key=lambda x: x['score'], reverse=True)
-    
+
     # Debug print for sorted emotions
     print(f"Sorted emotions: {emotions_sorted}")
-    
+
     # Take top 5 emotions
     top_5_emotions = emotions_sorted[:5]
-    
+
     # Extract emotion names from the top 5 emotions
     top_5_emotion_names = [emotion['name'] for emotion in top_5_emotions]
-    
+
     # Debug print for top 5 emotion names
     print(f"Top 5 emotion names: {top_5_emotion_names}")
-    
+
+    # Convert items_in_fridge to a string
+    items_in_fridge_str = json.dumps(items_in_fridge)
+
     # Generate a recipe prompt based on identified emotions and processed response
-    recipe_prompt = f"Based on the top 5 detected emotions: {', '.join(top_5_emotion_names)}, generate a recipe using {request.json['processed_response']}."
-    
+    recipe_prompt = f"Based on the top 5 detected emotions: {', '.join(top_5_emotion_names)}, generate a recipe using these items: {items_in_fridge_str}."
+
     # Debug print for recipe prompt
     print(f"Recipe prompt: {recipe_prompt}")
 
@@ -228,20 +226,20 @@ def generate_recipe():
             {
                 "role": "user",
                 "parts": [
-                    request.json['processed_response'],
-                    recipe_prompt,
+                    {"text": recipe_prompt}
                 ],
             },
         ]
     )
-    
+
     # Retrieve the generated recipe
     recipe_response = recipe_generation.send_message(recipe_prompt)
-    
+
     # Debug print for recipe response
     print(f"Generated recipe response: {recipe_response.text}")
-    
+
     return jsonify({'recipe': recipe_response.text})
+
 
 
 ecost = 0
@@ -278,6 +276,36 @@ def get_concatenated_names():
     concatenated_names_with_prefix = 'In the fridge, ' + concatenated_names
 
     return jsonify(concatenated_names_with_prefix)
+
+@app.route('/future-food-plan', methods=['POST'])
+def future_food_plan():
+    # Ensure that necessary input is provided
+    if not request.json or 'dish_types' not in request.json:
+        return jsonify({'error': 'No input provided'}), 400
+
+    dish_types = request.json['dish_types']
+
+    # Generate a prompt to create a food plan for the next 7 days
+    food_plan_prompt = (f"Create a food plan for the next 7 days based on the following items in the fridge: "
+                        f"{', '.join(item['name'] for item in items_in_fridge)}. "
+                        f"Include breakfast, lunch, and dinner for each day. The user prefers the following types of dishes: "
+                        f"{', '.join(dish_types)}.")
+
+    # Start a chat session to generate the food plan
+    food_plan_generation = model.start_chat(
+        history=[
+            {
+                "role": "user",
+                "parts": [
+                    food_plan_prompt,
+                ],
+            },
+        ]
+    )
+    food_plan_response = food_plan_generation.send_message(food_plan_prompt)
+
+    return jsonify({'food_plan': food_plan_response.text})
+
 
 
 if __name__ == "__main__":
