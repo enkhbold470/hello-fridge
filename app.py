@@ -163,6 +163,13 @@ def generate_recipe():
     return jsonify({"recipe": recipe_response.text})
 
 
+@app.route("/update-sensor", methods=["POST"])
+def update_sensor():
+    data = request.json
+    print(data)
+    return jsonify({"message": "Sensor data updated"})
+
+
 if __name__ == "__main__":
     if not os.path.exists(app.config["UPLOAD_FOLDER"]):
         os.makedirs(app.config["UPLOAD_FOLDER"])
