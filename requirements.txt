@@ -4,3 +4,4 @@ requests
 jsonify
 google-generativeai
 python-dotenv
+hume[stream]
