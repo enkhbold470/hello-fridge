@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, session
 import os
 import google.generativeai as genai
 from flask_cors import CORS
@@ -9,10 +9,14 @@ import json
 import asyncio
 from hume import HumeStreamClient, StreamSocket
 from hume.models.config import FaceConfig
+import certifi
+import ssl
+import aiohttp
 
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'
 CORS(app)
 # Configure Google AI with your API key
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -23,14 +27,20 @@ def save_prediction_to_file(prediction):
         json.dump(prediction, json_file, indent=4)
     print("Data has been written to data.json")
 
-async def predict_face_emotion() :
+async def predict_face_emotion():
     print("called")
     config = FaceConfig(identify_faces=True)
+    
+    # Create an SSL context that does not verify SSL certificates
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    
+    # Patch aiohttp to use the custom SSL context
+    aiohttp.connector.TCPConnector.ssl_context = ssl_context
+
     async with Humeclient.connect([config]) as socket:
         result = await socket.send_file("face.jpg")
         save_prediction_to_file(result)
-        return result   
-
+        return result 
 
 # Upload function for Gemini
 def upload_to_gemini(path, mime_type=None):
@@ -81,7 +91,6 @@ def upload_file():
         filename = secure_filename(file.filename)
         image_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(image_path)
-        print(image_path, "file uploaded")
         if image_path:
             file = upload_to_gemini(image_path, mime_type="image/jpeg")
 
@@ -91,14 +100,14 @@ def upload_file():
                         "role": "user",
                         "parts": [
                             file,
-                            "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category and expiration date by considering the average expire time for those food.",
+                            "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams expires at 12th of July. Add the category and exact expiration date by adding the current time plus the average expire time for those food.",
                         ],
                     },
                 ]
             )
 
             response = chat_session.send_message(
-                "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category and expiration date by considering the average expire time for those food."
+                "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams expires at 12th of July. Add the category and exact expiration date by adding the current time plus the average expire time for those food."
             )
 
             processed_response = model.start_chat(
@@ -151,32 +160,74 @@ def faceRecognition():
         filename = secure_filename(file.filename)
         file.save("face.jpg")
         print("face.jpg", "file uploaded")
+        prediction = asyncio.run(predict_face_emotion())
+        # prediction = {"Angry": 1}
+        session['emotion_prediction'] = prediction
         # prediction = asyncio.run(predict_face_emotion())
-        prediction = {"Angry": 1}
         return jsonify({"prediction": prediction}), 200
     
     return jsonify({"error": "Failed to capture image"}), 500
-
-
 
 @app.route('/recipe', methods=['POST'])
 def generate_recipe():
     # Ensure that the processed response text is provided
     if not request.json or 'processed_response' not in request.json:
+        print("Error: No processed response provided")  # Debug print
         return jsonify({'error': 'No processed response provided'}), 400
     
-    processed_response = request.json['processed_response']
+    # Load data from data.json (assuming it's in the same directory)
+    try:
+        with open('data.json', 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Error loading data.json: {e}")  # Debug print
+        return jsonify({'error': 'Error loading data.json'}), 500
     
-    # Generate a recipe prompt based on identified food
-    recipe_prompt = f"Generate a recipe using {processed_response}."
+    # Retrieve the emotion prediction from the loaded data
+    emotion_prediction = data.get('face')  # Adjust this based on your actual JSON structure
     
+    # Debug print for loaded data
+    print(f"Loaded emotion prediction: {emotion_prediction}")
+    
+    # Validate the prediction and extract the emotions
+    if not emotion_prediction or 'predictions' not in emotion_prediction:
+        print("Error: No valid emotion prediction found")  # Debug print
+        return jsonify({'error': 'No valid emotion prediction found'}), 400
+    
+    # Assuming only one prediction is available in the example JSON
+    emotions = emotion_prediction['predictions'][0]['emotions']
+    
+    # Debug print for emotions
+    print(f"Extracted emotions: {emotions}")
+    
+    # Sort emotions by score (descending)
+    emotions_sorted = sorted(emotions, key=lambda x: x['score'], reverse=True)
+    
+    # Debug print for sorted emotions
+    print(f"Sorted emotions: {emotions_sorted}")
+    
+    # Take top 5 emotions
+    top_5_emotions = emotions_sorted[:5]
+    
+    # Extract emotion names from the top 5 emotions
+    top_5_emotion_names = [emotion['name'] for emotion in top_5_emotions]
+    
+    # Debug print for top 5 emotion names
+    print(f"Top 5 emotion names: {top_5_emotion_names}")
+    
+    # Generate a recipe prompt based on identified emotions and processed response
+    recipe_prompt = f"Based on the top 5 detected emotions: {', '.join(top_5_emotion_names)}, generate a recipe using {request.json['processed_response']}."
+    
+    # Debug print for recipe prompt
+    print(f"Recipe prompt: {recipe_prompt}")
+
     # Start a chat session to generate the recipe
     recipe_generation = model.start_chat(
         history=[
             {
                 "role": "user",
                 "parts": [
-                    processed_response,
+                    request.json['processed_response'],
                     recipe_prompt,
                 ],
             },
@@ -185,6 +236,9 @@ def generate_recipe():
     
     # Retrieve the generated recipe
     recipe_response = recipe_generation.send_message(recipe_prompt)
+    
+    # Debug print for recipe response
+    print(f"Generated recipe response: {recipe_response.text}")
     
     return jsonify({'recipe': recipe_response.text})
 
