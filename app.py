@@ -92,7 +92,6 @@ def upload_file():
         filename = secure_filename(file.filename)
         image_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(image_path)
-        print(image_path, "file uploaded")
         if image_path:
             file = upload_to_gemini(image_path, mime_type="image/jpeg")
 
@@ -102,14 +101,14 @@ def upload_file():
                         "role": "user",
                         "parts": [
                             file,
-                            "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category and expiration date by considering the average expire time for those food.",
+                            "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams expires at 12th of July. Add the category and exact expiration date by adding the current time plus the average expire time for those food.",
                         ],
                     },
                 ]
             )
 
             response = chat_session.send_message(
-                "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams. Add the category and expiration date by considering the average expire time for those food."
+                "What are the food in this image? list all the food or drinks in the image and estimate the weight. List them like this - A can of soda, likely between 12 and 16 oz, or about 350-475 grams expires at 12th of July. Add the category and exact expiration date by adding the current time plus the average expire time for those food."
             )
 
             processed_response = model.start_chat(
